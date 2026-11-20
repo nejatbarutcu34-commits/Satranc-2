@@ -1,0 +1,200 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Online Satranç</title>
+<style>
+  :root { --s: min(94vw, 62vh, 560px); --bg: #1f1d1b; --panel: #2c2926; --txt: #eee; --acc: #81b64c; }
+  * { box-sizing: border-box; }
+  body { margin: 0; min-height: 100vh; background: var(--bg); color: var(--txt); font-family: system-ui, sans-serif; display: flex; align-items: center; justify-content: center; }
+  .screen { display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 16px; text-align: center; }
+  .hidden { display: none !important; }
+  h1 { font-size: 2.6rem; margin: 0 0 8px; letter-spacing: 3px; }
+  .logo { font-size: 5rem; line-height: 1; }
+  button { font: inherit; font-weight: 600; border: 0; border-radius: 10px; padding: 14px 28px; cursor: pointer; color: #fff; background: #3d3a37; min-width: 220px; }
+  button:hover { filter: brightness(1.15); }
+  button.primary { background: var(--acc); font-size: 1.25rem; }
+  button.danger { background: #b33; min-width: 0; padding: 10px 18px; }
+  button:disabled { opacity: .4; cursor: default; }
+  .muted { color: #aaa; font-size: .9rem; }
+  .spinner { width: 46px; height: 46px; border: 5px solid #444; border-top-color: var(--acc); border-radius: 50%; animation: sp 1s linear infinite; }
+  @keyframes sp { to { transform: rotate(360deg); } }
+
+  #board { width: var(--s); height: var(--s); display: grid; grid-template-columns: repeat(8, 1fr); border-radius: 6px; overflow: hidden; box-shadow: 0 8px 30px #0008; user-select: none; }
+  .sq { position: relative; display: flex; align-items: center; justify-content: center; cursor: pointer; }
+  .sq.l { background: #f0d9b5; } .sq.d { background: #b58863; }
+  .sq.last { box-shadow: inset 0 0 0 100px rgba(255, 235, 59, .38); }
+  .sq.sel { box-shadow: inset 0 0 0 100px rgba(80, 200, 80, .45); }
+  .sq.check { background: radial-gradient(circle, #ff3b3b 0%, #ff3b3b55 60%, transparent 75%), inherit; }
+  .sq.hint::after { content: ''; width: 28%; height: 28%; border-radius: 50%; background: rgba(0, 0, 0, .25); position: absolute; }
+  .sq.cap::after { content: ''; position: absolute; inset: 4%; border-radius: 50%; border: calc(var(--s) / 100) solid rgba(0, 0, 0, .3); }
+  .pc { font-size: calc(var(--s) / 8 * .8); line-height: 1; z-index: 1; font-family: "Segoe UI Symbol", "Noto Sans Symbols 2", "DejaVu Sans", serif; }
+  .pc.w { color: #fff; text-shadow: 0 0 2px #000, 0 0 2px #000, 0 0 3px #000, 0 1px 1px #000; }
+  .pc.b { color: #151515; text-shadow: 0 0 2px rgba(255,255,255,.35); }
+  .co { position: absolute; font-size: calc(var(--s) / 50); font-weight: 700; opacity: .7; pointer-events: none; }
+  .co.r { top: 2px; left: 3px; } .co.f { bottom: 1px; right: 3px; }
+  .sq.l .co { color: #b58863; } .sq.d .co { color: #f0d9b5; }
+
+  .bar { width: var(--s); display: flex; justify-content: space-between; align-items: center; padding: 8px 4px; font-weight: 600; }
+  #status { min-height: 1.4em; font-weight: 600; }
+  .overlay { position: fixed; inset: 0; background: #000a; display: flex; align-items: center; justify-content: center; z-index: 10; }
+  .box { background: var(--panel); padding: 26px; border-radius: 14px; display: flex; flex-direction: column; gap: 16px; align-items: center; max-width: 90vw; }
+  .promo { display: flex; gap: 10px; }
+  .promo button { min-width: 0; font-size: 2.4rem; padding: 6px 14px; background: #f0d9b5; color: #151515; }
+</style>
+</head>
+<body>
+
+<div id="menu" class="screen">
+  <div class="logo">♞</div>
+  <h1>SATRANÇ</h1>
+  <button class="primary" id="play">Oyna</button>
+  <button id="quit">Ayrıl</button>
+  <div class="muted">Çevrimiçi oyuncu: <span id="online">0</span></div>
+</div>
+
+<div id="search" class="screen hidden">
+  <div class="spinner"></div>
+  <h2>Rakip aranıyor…</h2>
+  <div class="muted">Siteyi kullanan başka bir oyuncu bekleniyor.</div>
+  <button id="cancel">İptal</button>
+</div>
+
+<div id="game" class="screen hidden">
+  <div class="bar"><span id="oppLabel">Rakip</span><span id="oppColor"></span></div>
+  <div id="board"></div>
+  <div class="bar"><span id="meLabel">Sen</span><button class="danger" id="resign">Pes Et</button></div>
+  <div id="status"></div>
+</div>
+
+<div id="bye" class="screen hidden">
+  <div class="logo">👋</div>
+  <h2>Görüşmek üzere!</h2>
+  <div class="muted">Tarayıcı sekmeyi otomatik kapatmadıysa, sekmeyi kendin kapatabilirsin.</div>
+  <button id="back">Ana Menü</button>
+</div>
+
+<div id="promoBox" class="overlay hidden"><div class="box"><div>Terfi için taş seç</div><div class="promo" id="promoBtns"></div></div></div>
+<div id="resultBox" class="overlay hidden"><div class="box"><h2 id="resultText"></h2><button class="primary" id="toMenu">Ana Menü</button></div></div>
+
+<script src="/chess.js"></script>
+<script>
+const $ = s => document.querySelector(s);
+const GL = { K: '♚', Q: '♛', R: '♜', B: '♝', N: '♞', P: '♟' };
+const myId = (window.crypto && crypto.randomUUID && crypto.randomUUID()) || (Math.random().toString(36).slice(2) + Date.now().toString(36) + Math.random().toString(36).slice(2));
+let state, myColor, legalMoves = [], selected = -1, lastMove = null, active = false;
+
+function show(id) { document.querySelectorAll('.screen').forEach(e => e.classList.toggle('hidden', e.id !== id)); }
+function post(path, extra) {
+  return fetch(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(Object.assign({ id: myId }, extra)) });
+}
+
+// ---- Sunucu bağlantısı ----
+const es = new EventSource('/events?id=' + myId);
+es.addEventListener('online', e => { $('#online').textContent = JSON.parse(e.data).count; });
+es.addEventListener('start', e => {
+  myColor = JSON.parse(e.data).color;
+  state = Chess.initialState(); legalMoves = Chess.legal(state);
+  selected = -1; lastMove = null; active = true;
+  $('#resultBox').classList.add('hidden');
+  $('#meLabel').textContent = 'Sen (' + (myColor === 'w' ? 'Beyaz' : 'Siyah') + ')';
+  $('#oppLabel').textContent = 'Rakip (' + (myColor === 'w' ? 'Siyah' : 'Beyaz') + ')';
+  $('#resign').disabled = false;
+  show('game'); render(); updateStatus();
+});
+es.addEventListener('move', e => {
+  const d = JSON.parse(e.data);
+  const m = legalMoves.find(x => x.from === d.from && x.to === d.to && (x.promo || null) === d.promo);
+  if (!m) return;
+  state = Chess.apply(state, m); lastMove = m; selected = -1;
+  legalMoves = Chess.legal(state);
+  render();
+  if (d.status !== 'playing') finish(d.status, d.winner); else updateStatus();
+});
+es.addEventListener('over', e => { const d = JSON.parse(e.data); finish(d.reason, d.winner); });
+
+function finish(reason, winner) {
+  active = false; selected = -1; render();
+  $('#resign').disabled = true;
+  const won = winner === myColor;
+  const txt = {
+    checkmate: won ? 'Şah mat! Kazandın 🎉' : 'Şah mat! Kaybettin',
+    stalemate: 'Pat — berabere',
+    draw50: '50 hamle kuralı — berabere',
+    insufficient: 'Yetersiz materyal — berabere',
+    resign: won ? 'Rakip pes etti. Kazandın 🎉' : 'Pes ettin. Kaybettin',
+    disconnect: 'Rakip bağlantıyı kesti. Kazandın 🎉',
+  }[reason] || 'Oyun bitti';
+  $('#status').textContent = txt;
+  $('#resultText').textContent = txt;
+  $('#resultBox').classList.remove('hidden');
+}
+
+function updateStatus() {
+  const mine = state.turn === myColor;
+  const chk = Chess.inCheck(state.board, state.turn);
+  $('#status').textContent = (chk ? 'Şah! ' : '') + (mine ? 'Sıra sende' : 'Rakibin sırası');
+}
+
+// ---- Tahta ----
+function render() {
+  const b = $('#board'); b.innerHTML = '';
+  const flip = myColor === 'b';
+  const kingSq = Chess.inCheck(state.board, state.turn) ? Chess.findKing(state.board, state.turn) : -1;
+  const targets = new Set(legalMoves.filter(m => m.from === selected).map(m => m.to));
+  for (let vr = 0; vr < 8; vr++) for (let vf = 0; vf < 8; vf++) {
+    const r = flip ? 7 - vr : vr, f = flip ? 7 - vf : vf, sq = r * 8 + f;
+    const d = document.createElement('div');
+    d.className = 'sq ' + ((r + f) % 2 === 0 ? 'l' : 'd');
+    if (sq === selected) d.classList.add('sel');
+    if (lastMove && (sq === lastMove.from || sq === lastMove.to)) d.classList.add('last');
+    if (sq === kingSq) d.classList.add('check');
+    if (targets.has(sq)) d.classList.add(state.board[sq] || (state.board[selected] && state.board[selected][1] === 'P' && sq === state.ep) ? 'cap' : 'hint');
+    const p = state.board[sq];
+    if (p) { const s = document.createElement('span'); s.className = 'pc ' + p[0]; s.textContent = GL[p[1]] + '\uFE0E'; d.appendChild(s); }
+    if (vf === 0) { const c = document.createElement('span'); c.className = 'co r'; c.textContent = 8 - r; d.appendChild(c); }
+    if (vr === 7) { const c = document.createElement('span'); c.className = 'co f'; c.textContent = 'abcdefgh'[f]; d.appendChild(c); }
+    d.onclick = () => clickSq(sq);
+    b.appendChild(d);
+  }
+}
+
+function clickSq(sq) {
+  if (!active || state.turn !== myColor) return;
+  if (selected >= 0) {
+    const c = legalMoves.filter(m => m.from === selected && m.to === sq);
+    if (c.length) {
+      if (c[0].promo) return askPromo(selected, sq);
+      post('/api/move', { from: selected, to: sq }); selected = -1; render(); return;
+    }
+  }
+  const p = state.board[sq];
+  selected = p && p[0] === myColor ? sq : -1;
+  render();
+}
+
+function askPromo(from, to) {
+  const box = $('#promoBtns'); box.innerHTML = '';
+  for (const t of ['Q', 'R', 'B', 'N']) {
+    const b = document.createElement('button');
+    b.textContent = GL[t] + '\uFE0E';
+    b.onclick = () => { $('#promoBox').classList.add('hidden'); post('/api/move', { from, to, promo: t }); selected = -1; render(); };
+    box.appendChild(b);
+  }
+  $('#promoBox').classList.remove('hidden');
+}
+
+// ---- Menü ----
+$('#play').onclick = async () => {
+  show('search');
+  try { await post('/api/find'); } catch { alert('Sunucuya bağlanılamadı.'); show('menu'); }
+};
+$('#cancel').onclick = () => { post('/api/cancel'); show('menu'); };
+$('#resign').onclick = () => { if (active && confirm('Pes etmek istediğine emin misin?')) post('/api/resign'); };
+$('#toMenu').onclick = () => { $('#resultBox').classList.add('hidden'); show('menu'); };
+$('#back').onclick = () => show('menu');
+$('#quit').onclick = () => { window.close(); setTimeout(() => show('bye'), 150); };
+</script>
+</body>
+</html>

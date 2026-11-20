@@ -1,0 +1,12 @@
+{
+  "name": "online-satranc",
+  "version": "1.0.0",
+  "description": "Rastgele rakiple online satranç",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
