@@ -133,7 +133,7 @@ const server = http.createServer(async (req, res) => {
   if (req.method === 'GET' && file) {
     fs.readFile(path.join(__dirname, file[0]), (err, buf) => {
       if (err) { res.writeHead(500); return res.end('Hata'); }
-      res.writeHead(200, { 'Content-Type': file[1] });
+      res.writeHead(200, { 'Content-Type': file[1], 'Cache-Control': 'no-cache' });
       res.end(buf);
     });
     return;
