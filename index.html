@@ -92,6 +92,11 @@ function post(path, extra) {
 
 // ---- Sunucu bağlantısı ----
 const es = new EventSource('/events?id=' + myId);
+// Bağlantı kopup yeniden kurulduğunda sunucu bizi tanımaz; durumu yeniden bildir
+es.addEventListener('hello', () => {
+  if (active) finish('lost', null);
+  else if (!$('#search').classList.contains('hidden')) post('/api/find');
+});
 es.addEventListener('online', e => { $('#online').textContent = JSON.parse(e.data).count; });
 es.addEventListener('start', e => {
   myColor = JSON.parse(e.data).color;
@@ -125,6 +130,7 @@ function finish(reason, winner) {
     insufficient: 'Yetersiz materyal — berabere',
     resign: won ? 'Rakip pes etti. Kazandın 🎉' : 'Pes ettin. Kaybettin',
     disconnect: 'Rakip bağlantıyı kesti. Kazandın 🎉',
+    lost: 'Bağlantın koptu, oyun sona erdi',
   }[reason] || 'Oyun bitti';
   $('#status').textContent = txt;
   $('#resultText').textContent = txt;

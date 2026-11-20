@@ -37,7 +37,16 @@ function endGame(g, reason, winner) {
 
 function find(id) {
   const c = clients.get(id);
-  if (!c || c.game || waiting === id) return;
+  if (!c) return;
+  // Oyuncu menüden "Oyna"ya bastıysa eski/bayat bir oyunu varsa bitir
+  if (c.game && !c.game.over) {
+    const g = c.game;
+    const opponent = g.white === id ? g.black : g.white;
+    releaseGame(g);
+    send(opponent, 'over', { reason: 'disconnect', winner: g.white === id ? 'b' : 'w' });
+  }
+  c.game = null;
+  if (waiting === id) { send(id, 'waiting', {}); return; }
   if (waiting && clients.has(waiting) && !clients.get(waiting).game) {
     const other = waiting;
     waiting = null;
@@ -89,6 +98,7 @@ const server = http.createServer(async (req, res) => {
     });
     res.write('retry: 2000\n\n');
     clients.set(id, { res, game: null });
+    send(id, 'hello', {});
     const ping = setInterval(() => res.write(': ping\n\n'), 20000);
     broadcastOnline();
     req.on('close', () => {
