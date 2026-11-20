@@ -36,6 +36,11 @@
   .co.r { top: 2px; left: 3px; } .co.f { bottom: 1px; right: 3px; }
   .sq.l .co { color: #b58863; } .sq.d .co { color: #f0d9b5; }
 
+  @keyframes shake { 0%, 100% { transform: translate(0, 0) rotate(0); } 15% { transform: translate(-3px, 1px) rotate(-8deg); } 30% { transform: translate(3px, -1px) rotate(8deg); } 45% { transform: translate(-3px, -1px) rotate(-6deg); } 60% { transform: translate(3px, 1px) rotate(6deg); } 75% { transform: translate(-2px, 0) rotate(-4deg); } }
+  .sq.check .pc { animation: shake .35s infinite; }
+  @keyframes pop { 0% { transform: scale(.3); opacity: 0; } 15% { transform: scale(1.15); opacity: 1; } 25% { transform: scale(1); } 85% { opacity: 1; } 100% { opacity: 0; } }
+  #shah { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; pointer-events: none; z-index: 20; }
+  #shah span { font-size: min(26vw, 150px); font-weight: 900; color: #ff3b3b; letter-spacing: 4px; text-shadow: 0 0 0 #000, 0 4px 0 #7a0000, 0 0 30px rgba(255, 59, 59, .6), 0 6px 24px #000c; -webkit-text-stroke: 2px #fff; animation: pop 2s ease-out forwards; }
   .bar { width: var(--s); display: flex; justify-content: space-between; align-items: center; padding: 8px 4px; font-weight: 600; }
   #status { min-height: 1.4em; font-weight: 600; }
   .overlay { position: fixed; inset: 0; background: #000a; display: flex; align-items: center; justify-content: center; z-index: 10; }
@@ -75,6 +80,7 @@
   <button id="back">Ana Menü</button>
 </div>
 
+<div id="shah" class="hidden"><span>ŞAH!</span></div>
 <div id="promoBox" class="overlay hidden"><div class="box"><div>Terfi için taş seç</div><div class="promo" id="promoBtns"></div></div></div>
 <div id="resultBox" class="overlay hidden"><div class="box"><h2 id="resultText"></h2><button class="primary" id="toMenu">Ana Menü</button></div></div>
 
@@ -115,8 +121,18 @@ es.addEventListener('move', e => {
   state = Chess.apply(state, m); lastMove = m; selected = -1;
   legalMoves = Chess.legal(state);
   render();
-  if (d.status !== 'playing') finish(d.status, d.winner); else updateStatus();
+  if (d.status !== 'playing') finish(d.status, d.winner);
+  else { updateStatus(); if (Chess.inCheck(state.board, state.turn)) showShah(); }
 });
+
+let shahTimer;
+function showShah() {
+  const box = $('#shah');
+  clearTimeout(shahTimer);
+  box.classList.add('hidden'); void box.offsetWidth; // animasyonu baştan başlat
+  box.classList.remove('hidden');
+  shahTimer = setTimeout(() => box.classList.add('hidden'), 2000);
+}
 es.addEventListener('over', e => { const d = JSON.parse(e.data); finish(d.reason, d.winner); });
 
 function finish(reason, winner) {
