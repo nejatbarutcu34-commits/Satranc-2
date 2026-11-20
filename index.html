@@ -15,11 +15,18 @@
   button { font: inherit; font-weight: 600; border: 0; border-radius: 10px; padding: 14px 28px; cursor: pointer; color: #fff; background: #3d3a37; min-width: 220px; }
   button:hover { filter: brightness(1.15); }
   button.primary { background: var(--acc); font-size: 1.25rem; }
+  button.ai { background: #4a6fa5; }
   button.danger { background: #b33; min-width: 0; padding: 10px 18px; }
   button:disabled { opacity: .4; cursor: default; }
   .muted { color: #aaa; font-size: .9rem; }
   .spinner { width: 46px; height: 46px; border: 5px solid #444; border-top-color: var(--acc); border-radius: 50%; animation: sp 1s linear infinite; }
   @keyframes sp { to { transform: rotate(360deg); } }
+
+  /* Oyuncu ismi: ana menüde sağ üstte */
+  #nameBox { position: fixed; top: 12px; right: 12px; z-index: 5; display: flex; flex-direction: column; align-items: flex-end; gap: 4px; max-width: 70vw; }
+  #nameBtn { min-width: 0; padding: 8px 14px; font-size: .95rem; background: #3d3a37; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #nameInput { font: inherit; padding: 8px 12px; border-radius: 10px; border: 2px solid var(--acc); background: #1a1816; color: #fff; width: 210px; max-width: 100%; }
+  #nameMsg { font-size: .8rem; color: #ff7b7b; min-height: 1em; }
 
   #board { width: var(--s); height: var(--s); display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); grid-template-rows: repeat(8, minmax(0, 1fr)); border-radius: 6px; overflow: hidden; box-shadow: 0 8px 30px #0008; user-select: none; }
   .sq { position: relative; min-width: 0; min-height: 0; overflow: hidden; display: flex; align-items: center; justify-content: center; cursor: pointer; }
@@ -41,7 +48,10 @@
   @keyframes pop { 0% { transform: scale(.3); opacity: 0; } 15% { transform: scale(1.15); opacity: 1; } 25% { transform: scale(1); } 85% { opacity: 1; } 100% { opacity: 0; } }
   #shah { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; pointer-events: none; z-index: 20; }
   #shah span { font-size: min(26vw, 150px); font-weight: 900; color: #ff3b3b; letter-spacing: 4px; text-shadow: 0 0 0 #000, 0 4px 0 #7a0000, 0 0 30px rgba(255, 59, 59, .6), 0 6px 24px #000c; -webkit-text-stroke: 2px #fff; animation: pop 2s ease-out forwards; }
-  .bar { width: var(--s); display: flex; justify-content: space-between; align-items: center; padding: 8px 4px; font-weight: 600; }
+
+  .bar { width: var(--s); display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 8px 4px; font-weight: 600; }
+  #oppLabel, #meLabel { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+  #oppLabel { font-size: 1.15rem; }
   #status { min-height: 1.4em; font-weight: 600; }
   .overlay { position: fixed; inset: 0; background: #000a; display: flex; align-items: center; justify-content: center; z-index: 10; }
   .box { background: var(--panel); padding: 26px; border-radius: 14px; display: flex; flex-direction: column; gap: 16px; align-items: center; max-width: 90vw; }
@@ -52,9 +62,15 @@
 <body>
 
 <div id="menu" class="screen">
+  <div id="nameBox">
+    <button id="nameBtn" title="İsmini değiştirmek için dokun">✏️ <span id="nameTxt">Player</span></button>
+    <input id="nameInput" class="hidden" maxlength="15" autocomplete="off" spellcheck="false" placeholder="İsmin (3-15 karakter)">
+    <div id="nameMsg"></div>
+  </div>
   <div class="logo">♞</div>
   <h1>SATRANÇ</h1>
   <button class="primary" id="play">Oyna</button>
+  <button class="ai" id="playAi">Yapay Zekaya Karşı</button>
   <button id="quit">Ayrıl</button>
   <div class="muted">Çevrimiçi oyuncu: <span id="online">0</span></div>
 </div>
@@ -62,12 +78,12 @@
 <div id="search" class="screen hidden">
   <div class="spinner"></div>
   <h2>Rakip aranıyor…</h2>
-  <div class="muted">Siteyi kullanan başka bir oyuncu bekleniyor.</div>
+  <div class="muted">Siteyi kullanan başka bir oyuncu bekleniyor.<br>15 saniye içinde kimse bulunamazsa yapay zekayla eşleşirsin.</div>
   <button id="cancel">İptal</button>
 </div>
 
 <div id="game" class="screen hidden">
-  <div class="bar"><span id="oppLabel">Rakip</span><span id="oppColor"></span></div>
+  <div class="bar"><span id="oppLabel">Rakip</span><span id="oppTag" class="muted"></span></div>
   <div id="board"></div>
   <div class="bar"><span id="meLabel">Sen</span><button class="danger" id="resign">Pes Et</button></div>
   <div id="status"></div>
@@ -88,33 +104,123 @@
 <script>
 const $ = s => document.querySelector(s);
 const GL = { K: '♚', Q: '♛', R: '♜', B: '♝', N: '♞', P: '♟' };
+const BOTS = [
+  { id: 'peynir', name: 'Eğitimci Peynir', info: 'Asla mat etmez' },
+  { id: 'fiko', name: 'Fiko', info: 'Kolay' },
+  { id: 'ismail', name: 'İsmail', info: 'Normal' },
+  { id: 'fisher', name: 'Bubi Robot Fisher', info: 'En zor' },
+];
+const NAME_KEY = 'satrancIsim';
+const SEARCH_WAIT_MS = 15000; // bu kadar sürede rakip bulunmazsa yapay zeka devreye girer
 const myId = (window.crypto && crypto.randomUUID && crypto.randomUUID()) || (Math.random().toString(36).slice(2) + Date.now().toString(36) + Math.random().toString(36).slice(2));
 let state, myColor, legalMoves = [], selected = -1, lastMove = null, active = false;
+let botMode = false, bot = null, oppName = '', gameToken = 0, searchTimer = null;
+let myName = 'Player';
+
+// ---- İsim ----
+const cleanName = v => String(v || '').replace(/[\u0000-\u001f\u007f<>]/g, '').replace(/\s+/g, ' ').trim();
+const validName = v => { const n = Array.from(v).length; return n >= 3 && n <= 15; };
+try { const s = cleanName(localStorage.getItem(NAME_KEY)); if (validName(s)) myName = s; } catch (e) {}
+$('#nameTxt').textContent = myName;
+
+const nameBtn = $('#nameBtn'), nameInput = $('#nameInput'), nameMsg = $('#nameMsg');
+function openName() {
+  nameBtn.classList.add('hidden'); nameInput.classList.remove('hidden');
+  nameInput.value = myName; nameMsg.textContent = '';
+  nameInput.focus(); nameInput.select();
+}
+function closeName(save) {
+  if (save) {
+    const v = cleanName(nameInput.value);
+    if (!validName(v)) { nameMsg.textContent = 'İsim 3-15 karakter arasında olmalı'; nameInput.focus(); return; }
+    myName = v;
+    try { localStorage.setItem(NAME_KEY, v); } catch (e) {}
+    $('#nameTxt').textContent = v;
+  }
+  nameInput.classList.add('hidden'); nameBtn.classList.remove('hidden'); nameMsg.textContent = '';
+}
+nameBtn.onclick = openName;
+nameInput.onkeydown = e => { if (e.key === 'Enter') closeName(true); else if (e.key === 'Escape') closeName(false); };
+nameInput.onblur = () => { if (!nameInput.classList.contains('hidden')) closeName(validName(cleanName(nameInput.value))); };
 
 function show(id) { document.querySelectorAll('.screen').forEach(e => e.classList.toggle('hidden', e.id !== id)); }
 function post(path, extra) {
   return fetch(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(Object.assign({ id: myId }, extra)) });
 }
 
+// ---- Yapay zeka (arka planda çalışır, ekran donmaz) ----
+let worker = null, pending = null, reqId = 0;
+try {
+  worker = new Worker('/bot-worker.js');
+  worker.onmessage = e => { if (pending && e.data.id === pending.id) { const p = pending; pending = null; p.done(e.data.m); } };
+  worker.onerror = () => { worker = null; if (pending) { const p = pending; pending = null; p.done(null); } };
+} catch (e) { worker = null; }
+
+function botTurn() {
+  const tok = gameToken, t0 = Date.now();
+  updateStatus();
+  const done = m => {
+    const found = m && legalMoves.find(x => x.from === m.from && x.to === m.to && (x.promo || null) === (m.promo || null));
+    const mv = found || legalMoves[Math.floor(Math.random() * legalMoves.length)];
+    setTimeout(() => { if (tok === gameToken && active && state.turn !== myColor) playLocal(mv); }, Math.max(0, 700 - (Date.now() - t0)));
+  };
+  if (!worker) return done(null);
+  const id = ++reqId;
+  pending = { id, done };
+  worker.postMessage({ id, state, bot: bot.id });
+}
+
+function playLocal(m) {
+  const mover = state.turn;
+  state = Chess.apply(state, m); lastMove = m; selected = -1;
+  legalMoves = Chess.legal(state);
+  render();
+  const st = Chess.status(state);
+  if (st !== 'playing') return finish(st, st === 'checkmate' ? mover : null);
+  updateStatus();
+  if (Chess.inCheck(state.board, state.turn)) showShah();
+  if (state.turn !== myColor) botTurn();
+}
+
+// ---- Oyun başlatma (hem online hem yapay zeka) ----
+function beginGame(color, opp, botInfo) {
+  clearTimeout(searchTimer);
+  gameToken++; pending = null;
+  myColor = color; oppName = opp; bot = botInfo || null; botMode = !!botInfo;
+  state = Chess.initialState(); legalMoves = Chess.legal(state);
+  selected = -1; lastMove = null; active = true;
+  for (const id of ['#resultBox', '#promoBox', '#shah']) $(id).classList.add('hidden');
+  const mine = color === 'w' ? 'Beyaz' : 'Siyah', theirs = color === 'w' ? 'Siyah' : 'Beyaz';
+  $('#meLabel').textContent = myName + ' (' + mine + ')';
+  $('#oppLabel').textContent = (botMode ? '🤖 ' : '') + opp + ' (' + theirs + ')';
+  $('#oppTag').textContent = botMode ? bot.info : '';
+  $('#resign').disabled = false;
+  show('game'); render(); updateStatus();
+  if (botMode && state.turn !== myColor) botTurn();
+}
+function startBotGame(note) {
+  const b = BOTS[Math.floor(Math.random() * BOTS.length)];
+  beginGame(Math.random() < 0.5 ? 'w' : 'b', b.name, b);
+  if (note) $('#status').textContent = note + ' ' + $('#status').textContent;
+}
+
 // ---- Sunucu bağlantısı ----
 const es = new EventSource('/events?id=' + myId);
 // Bağlantı kopup yeniden kurulduğunda sunucu bizi tanımaz; durumu yeniden bildir
 es.addEventListener('hello', () => {
+  if (botMode && active) return;
   if (active) finish('lost', null);
-  else if (!$('#search').classList.contains('hidden')) post('/api/find');
+  else if (!$('#search').classList.contains('hidden')) post('/api/find', { name: myName });
 });
 es.addEventListener('online', e => { $('#online').textContent = JSON.parse(e.data).count; });
 es.addEventListener('start', e => {
-  myColor = JSON.parse(e.data).color;
-  state = Chess.initialState(); legalMoves = Chess.legal(state);
-  selected = -1; lastMove = null; active = true;
-  $('#resultBox').classList.add('hidden');
-  $('#meLabel').textContent = 'Sen (' + (myColor === 'w' ? 'Beyaz' : 'Siyah') + ')';
-  $('#oppLabel').textContent = 'Rakip (' + (myColor === 'w' ? 'Siyah' : 'Beyaz') + ')';
-  $('#resign').disabled = false;
-  show('game'); render(); updateStatus();
+  clearTimeout(searchTimer);
+  if (botMode && active) { post('/api/resign'); return; } // çok nadir yarış durumu
+  const d = JSON.parse(e.data);
+  beginGame(d.color, d.opp || 'Player', null);
 });
 es.addEventListener('move', e => {
+  if (botMode) return;
   const d = JSON.parse(e.data);
   const m = legalMoves.find(x => x.from === d.from && x.to === d.to && (x.promo || null) === d.promo);
   if (!m) return;
@@ -136,7 +242,7 @@ function showShah() {
 es.addEventListener('over', e => { const d = JSON.parse(e.data); finish(d.reason, d.winner); });
 
 function finish(reason, winner) {
-  active = false; selected = -1; render();
+  active = false; selected = -1; pending = null; render();
   $('#resign').disabled = true;
   const won = winner === myColor;
   const txt = {
@@ -144,7 +250,7 @@ function finish(reason, winner) {
     stalemate: 'Pat — berabere',
     draw50: '50 hamle kuralı — berabere',
     insufficient: 'Yetersiz materyal — berabere',
-    resign: won ? 'Rakip pes etti. Kazandın 🎉' : 'Pes ettin. Kaybettin',
+    resign: won ? (botMode ? oppName + ' pes etti. Kazandın 🎉' : 'Rakip pes etti. Kazandın 🎉') : 'Pes ettin. Kaybettin',
     disconnect: 'Rakip bağlantıyı kesti. Kazandın 🎉',
     lost: 'Bağlantın koptu, oyun sona erdi',
   }[reason] || 'Oyun bitti';
@@ -156,7 +262,7 @@ function finish(reason, winner) {
 function updateStatus() {
   const mine = state.turn === myColor;
   const chk = Chess.inCheck(state.board, state.turn);
-  $('#status').textContent = (chk ? 'Şah! ' : '') + (mine ? 'Sıra sende' : 'Rakibin sırası');
+  $('#status').textContent = (chk ? 'Şah! ' : '') + (mine ? 'Sıra sende' : (botMode ? oppName + ' düşünüyor…' : 'Rakibin sırası'));
 }
 
 // ---- Tahta ----
@@ -174,11 +280,22 @@ function render() {
     if (sq === kingSq) d.classList.add('check');
     if (targets.has(sq)) d.classList.add(state.board[sq] || (state.board[selected] && state.board[selected][1] === 'P' && sq === state.ep) ? 'cap' : 'hint');
     const p = state.board[sq];
-    if (p) { const s = document.createElement('span'); s.className = 'pc ' + p[0]; s.textContent = GL[p[1]] + '\uFE0E'; d.appendChild(s); }
+    if (p) { const s = document.createElement('span'); s.className = 'pc ' + p[0]; s.textContent = GL[p[1]] + '︎'; d.appendChild(s); }
     if (vf === 0) { const c = document.createElement('span'); c.className = 'co r'; c.textContent = 8 - r; d.appendChild(c); }
     if (vr === 7) { const c = document.createElement('span'); c.className = 'co f'; c.textContent = 'abcdefgh'[f]; d.appendChild(c); }
     d.onclick = () => clickSq(sq);
     b.appendChild(d);
+  }
+}
+
+function sendMove(from, to, promo) {
+  selected = -1;
+  if (botMode) {
+    const m = legalMoves.find(x => x.from === from && x.to === to && (x.promo || null) === (promo || null));
+    if (m) playLocal(m);
+  } else {
+    post('/api/move', { from, to, promo });
+    render();
   }
 }
 
@@ -188,7 +305,7 @@ function clickSq(sq) {
     const c = legalMoves.filter(m => m.from === selected && m.to === sq);
     if (c.length) {
       if (c[0].promo) return askPromo(selected, sq);
-      post('/api/move', { from: selected, to: sq }); selected = -1; render(); return;
+      return sendMove(selected, sq);
     }
   }
   const p = state.board[sq];
@@ -200,8 +317,8 @@ function askPromo(from, to) {
   const box = $('#promoBtns'); box.innerHTML = '';
   for (const t of ['Q', 'R', 'B', 'N']) {
     const b = document.createElement('button');
-    b.textContent = GL[t] + '\uFE0E';
-    b.onclick = () => { $('#promoBox').classList.add('hidden'); post('/api/move', { from, to, promo: t }); selected = -1; render(); };
+    b.textContent = GL[t] + '︎';
+    b.onclick = () => { $('#promoBox').classList.add('hidden'); sendMove(from, to, t); };
     box.appendChild(b);
   }
   $('#promoBox').classList.remove('hidden');
@@ -210,10 +327,21 @@ function askPromo(from, to) {
 // ---- Menü ----
 $('#play').onclick = async () => {
   show('search');
-  try { await post('/api/find'); } catch { alert('Sunucuya bağlanılamadı.'); show('menu'); }
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(async () => {
+    if ($('#search').classList.contains('hidden')) return;
+    try { await post('/api/cancel'); } catch (e) {}
+    if ($('#search').classList.contains('hidden') || active) return;
+    startBotGame('Rakip bulunamadı, yapay zekayla eşleştin.');
+  }, SEARCH_WAIT_MS);
+  try { await post('/api/find', { name: myName }); } catch (e) { clearTimeout(searchTimer); alert('Sunucuya bağlanılamadı.'); show('menu'); }
 };
-$('#cancel').onclick = () => { post('/api/cancel'); show('menu'); };
-$('#resign').onclick = () => { if (active && confirm('Pes etmek istediğine emin misin?')) post('/api/resign'); };
+$('#playAi').onclick = () => startBotGame();
+$('#cancel').onclick = () => { clearTimeout(searchTimer); post('/api/cancel'); show('menu'); };
+$('#resign').onclick = () => {
+  if (!active || !confirm('Pes etmek istediğine emin misin?')) return;
+  if (botMode) finish('resign', myColor === 'w' ? 'b' : 'w'); else post('/api/resign');
+};
 $('#toMenu').onclick = () => { $('#resultBox').classList.add('hidden'); show('menu'); };
 $('#back').onclick = () => show('menu');
 $('#quit').onclick = () => { window.close(); setTimeout(() => show('bye'), 150); };

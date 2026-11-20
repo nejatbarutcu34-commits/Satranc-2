@@ -9,9 +9,18 @@ const STATIC = {
   '/': ['index.html', 'text/html; charset=utf-8'],
   '/index.html': ['index.html', 'text/html; charset=utf-8'],
   '/chess.js': ['chess.js', 'application/javascript; charset=utf-8'],
+  '/bot.js': ['bot.js', 'application/javascript; charset=utf-8'],
+  '/bot-worker.js': ['bot-worker.js', 'application/javascript; charset=utf-8'],
 };
 
-const clients = new Map(); // id -> { res, game }
+const clients = new Map(); // id -> { res, game, name }
+
+// Oyuncu ismi: 3-15 karakter, kontrol karakterleri ve < > temizlenir
+function cleanName(n) {
+  const s = String(n || '').replace(/[\u0000-\u001f\u007f<>]/g, '').replace(/\s+/g, ' ').trim();
+  const len = [...s].length;
+  return len >= 3 && len <= 15 ? s : 'Player';
+}
 let waiting = null;
 
 function send(id, event, data) {
@@ -35,9 +44,10 @@ function endGame(g, reason, winner) {
   ids.forEach(id => send(id, 'over', { reason, winner }));
 }
 
-function find(id) {
+function find(id, name) {
   const c = clients.get(id);
   if (!c) return;
+  c.name = cleanName(name);
   // Oyuncu menüden "Oyna"ya bastıysa eski/bayat bir oyunu varsa bitir
   if (c.game && !c.game.over) {
     const g = c.game;
@@ -54,8 +64,8 @@ function find(id) {
     const g = { white, black, state: Chess.initialState(), over: false };
     clients.get(white).game = g;
     clients.get(black).game = g;
-    send(white, 'start', { color: 'w' });
-    send(black, 'start', { color: 'b' });
+    send(white, 'start', { color: 'w', opp: clients.get(black).name });
+    send(black, 'start', { color: 'b', opp: clients.get(white).name });
   } else {
     waiting = id;
     send(id, 'waiting', {});
@@ -97,7 +107,7 @@ const server = http.createServer(async (req, res) => {
       Connection: 'keep-alive', 'X-Accel-Buffering': 'no',
     });
     res.write('retry: 2000\n\n');
-    clients.set(id, { res, game: null });
+    clients.set(id, { res, game: null, name: 'Player' });
     send(id, 'hello', {});
     const ping = setInterval(() => res.write(': ping\n\n'), 20000);
     broadcastOnline();
@@ -118,7 +128,7 @@ const server = http.createServer(async (req, res) => {
     const id = body.id;
     let ok = true;
     if (!clients.has(id)) ok = false;
-    else if (url.pathname === '/api/find') find(id);
+    else if (url.pathname === '/api/find') find(id, body.name);
     else if (url.pathname === '/api/cancel') { if (waiting === id) waiting = null; }
     else if (url.pathname === '/api/move') ok = move(id, body);
     else if (url.pathname === '/api/resign') {
