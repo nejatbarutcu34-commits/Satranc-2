@@ -52,6 +52,9 @@
   .bar { width: var(--s); display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 8px 4px; font-weight: 600; }
   #oppLabel, #meLabel { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
   #oppLabel { font-size: 1.15rem; }
+  .bar .right { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+  .score { font-weight: 800; font-size: 1.1rem; min-width: 2.4em; text-align: right; }
+  .score.up { color: #5fe35f; } .score.down { color: #ff5a5a; } .score.zero { color: #aaa; }
   #status { min-height: 1.4em; font-weight: 600; }
   .overlay { position: fixed; inset: 0; background: #000a; display: flex; align-items: center; justify-content: center; z-index: 10; }
   .box { background: var(--panel); padding: 26px; border-radius: 14px; display: flex; flex-direction: column; gap: 16px; align-items: center; max-width: 90vw; }
@@ -83,9 +86,9 @@
 </div>
 
 <div id="game" class="screen hidden">
-  <div class="bar"><span id="oppLabel">Rakip</span><span id="oppTag" class="muted"></span></div>
+  <div class="bar"><span id="oppLabel">Rakip</span><span class="right"><span id="oppTag" class="muted"></span><span id="oppScore" class="score zero">0</span></span></div>
   <div id="board"></div>
-  <div class="bar"><span id="meLabel">Sen</span><button class="danger" id="resign">Pes Et</button></div>
+  <div class="bar"><span id="meLabel">Sen</span><span class="right"><span id="meScore" class="score zero">0</span><button class="danger" id="resign">Pes Et</button></span></div>
   <div id="status"></div>
 </div>
 
@@ -116,6 +119,26 @@ const myId = (window.crypto && crypto.randomUUID && crypto.randomUUID()) || (Mat
 let state, myColor, legalMoves = [], selected = -1, lastMove = null, active = false;
 let botMode = false, bot = null, oppName = '', gameToken = 0, searchTimer = null;
 let myName = 'Player';
+
+// ---- Puan: yenen taşların değeri (piyon 1, at/fil 3, kale 5, vezir 9) ----
+const PTS = { P: 1, N: 3, B: 3, R: 5, Q: 9, K: 0 };
+let scoreMe = 0; // benim puanım: yediklerim - yenenlerim
+function renderScore() {
+  const set = (id, n) => {
+    const e = $(id);
+    e.className = 'score ' + (n > 0 ? 'up' : n < 0 ? 'down' : 'zero');
+    e.textContent = n > 0 ? '⬆️' + n : n < 0 ? '⬇️' + (-n) : '0';
+  };
+  set('#meScore', scoreMe); set('#oppScore', -scoreMe);
+}
+// Hamle uygulanmadan ÖNCE çağrılır (state hâlâ eski konum)
+function noteCapture(m) {
+  const victim = state.board[m.to], piece = state.board[m.from];
+  let v = victim ? PTS[victim[1]] : 0;
+  if (!victim && piece && piece[1] === 'P' && m.to === state.ep) v = 1; // en passant
+  scoreMe += state.turn === myColor ? v : -v;
+  renderScore();
+}
 
 // ---- İsim ----
 const cleanName = v => String(v || '').replace(/[\u0000-\u001f\u007f<>]/g, '').replace(/\s+/g, ' ').trim();
@@ -172,6 +195,7 @@ function botTurn() {
 
 function playLocal(m) {
   const mover = state.turn;
+  noteCapture(m);
   state = Chess.apply(state, m); lastMove = m; selected = -1;
   legalMoves = Chess.legal(state);
   render();
@@ -189,6 +213,7 @@ function beginGame(color, opp, botInfo) {
   myColor = color; oppName = opp; bot = botInfo || null; botMode = !!botInfo;
   state = Chess.initialState(); legalMoves = Chess.legal(state);
   selected = -1; lastMove = null; active = true;
+  scoreMe = 0; renderScore();
   for (const id of ['#resultBox', '#promoBox', '#shah']) $(id).classList.add('hidden');
   const mine = color === 'w' ? 'Beyaz' : 'Siyah', theirs = color === 'w' ? 'Siyah' : 'Beyaz';
   $('#meLabel').textContent = myName + ' (' + mine + ')';
@@ -224,6 +249,7 @@ es.addEventListener('move', e => {
   const d = JSON.parse(e.data);
   const m = legalMoves.find(x => x.from === d.from && x.to === d.to && (x.promo || null) === d.promo);
   if (!m) return;
+  noteCapture(m);
   state = Chess.apply(state, m); lastMove = m; selected = -1;
   legalMoves = Chess.legal(state);
   render();
