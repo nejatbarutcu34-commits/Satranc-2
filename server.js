@@ -139,6 +139,12 @@ const server = http.createServer(async (req, res) => {
     return res.end(JSON.stringify({ ok }));
   }
 
+  // Sağlık kontrolü: dışarıdan "açık mısın?" diye sorulan hafif adres
+  if ((req.method === 'GET' || req.method === 'HEAD') && url.pathname === '/health') {
+    res.writeHead(200, { 'Content-Type': 'text/plain', 'Cache-Control': 'no-store' });
+    return res.end(req.method === 'HEAD' ? undefined : 'ok');
+  }
+
   const file = STATIC[url.pathname];
   if (req.method === 'GET' && file) {
     fs.readFile(path.join(__dirname, file[0]), (err, buf) => {
