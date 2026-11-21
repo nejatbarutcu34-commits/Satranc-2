@@ -11,6 +11,8 @@ const STATIC = {
   '/chess.js': ['chess.js', 'application/javascript; charset=utf-8'],
   '/bot.js': ['bot.js', 'application/javascript; charset=utf-8'],
   '/bot-worker.js': ['bot-worker.js', 'application/javascript; charset=utf-8'],
+  '/robots.txt': ['robots.txt', 'text/plain; charset=utf-8'],
+  '/sitemap.xml': ['sitemap.xml', 'application/xml; charset=utf-8'],
 };
 
 const clients = new Map(); // id -> { res, game, name }
